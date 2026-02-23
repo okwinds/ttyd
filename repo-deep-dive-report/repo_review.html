@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ttyd Repo Deep Dive Report</title>
+  <style>:root{
+  --bg:#0b0f14; --panel:#0f1722; --text:#e6edf3; --muted:#9fb0c0;
+  --link:#6cb6ff; --border:#1f2a37; --code-bg:#0a0f16; --code-border:#1b2636;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#ffffff; --panel:#f6f8fa; --text:#1f2328; --muted:#57606a;
+    --link:#0969da; --border:#d0d7de; --code-bg:#f6f8fa; --code-border:#d0d7de;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+.layout{display:grid;grid-template-columns:320px 1fr;min-height:100vh}
+.sidebar{border-right:1px solid var(--border);background:var(--panel);padding:18px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+.content{padding:28px 34px;max-width:1100px}
+.brand{font-weight:700;margin-bottom:6px}
+.meta{color:var(--muted);font-size:12px;margin-bottom:14px}
+.toc{list-style:none;padding:0;margin:0}
+.toc-item{margin:6px 0}
+h1,h2,h3,h4,h5,h6{margin:22px 0 10px;line-height:1.25}
+h1{font-size:28px} h2{font-size:22px} h3{font-size:18px}
+p{margin:10px 0}
+blockquote{margin:12px 0;padding:10px 12px;border-left:4px solid var(--border);background:rgba(255,255,255,0.03)}
+pre{background:var(--code-bg);border:1px solid var(--code-border);padding:12px;border-radius:10px;overflow:auto}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:13px}
+ul{padding-left:22px}
+.muted{color:var(--muted)}
+@media (max-width: 980px){.layout{grid-template-columns:1fr}.sidebar{position:relative;height:auto}}</style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">ttyd Repo Deep Dive Report</div>
+      <div class="meta">Generated: 2026-02-23 17:08:04<br/><span class="muted">Offline, standalone</span></div>
+      <ul class="toc">
+<li class="toc-item" style="margin-left:0px"><a href="#ttyd-仓库深度走读报告以源码为事实源">`ttyd` 仓库深度走读报告（以源码为事实源）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#1-一句话结论executive-summary">1. 一句话结论（Executive Summary）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#2-全局地图architecture-map">2. 全局地图（Architecture Map）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#21-目录与职责">2.1 目录与职责</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#22-组件依赖图mermaid">2.2 组件依赖图（Mermaid）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#3-入口与关键执行流entrypoint-critical-path">3. 入口与关键执行流（Entrypoint → Critical Path）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#31-后端入口srcservercmain">3.1 后端入口：`src/server.c:main`</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#32-关键时序浏览器访问-ws-握手-spawn-双向流">3.2 关键时序：浏览器访问 → WS 握手 → spawn → 双向流</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#4-核心模块深挖high-leverage-subsystems">4. 核心模块深挖（High-Leverage Subsystems）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#41-http-handlersrchttpc">4.1 HTTP handler（`src/http.c`）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#42-ws-协议与会话管理srcprotocolc-srcserverh">4.2 WS 协议与会话管理（`src/protocol.c` + `src/server.h`）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#43-ptyconptysrcptyc">4.3 PTY/ConPTY（`src/pty.c`）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#44-前端协议实现htmlsrccomponentsterminalxtermindexts">4.4 前端协议实现（`html/src/components/terminal/xterm/index.ts`）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#45-构建发布链路cmake-webpackgulp-ci">4.5 构建/发布链路（CMake + webpack/gulp + CI）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#5-上手实操getting-started基于源码推导">5. 上手实操（Getting Started，基于源码推导）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#51-构建后端">5.1 构建后端</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#52-运行最常见">5.2 运行（最常见）</a></li>
+<li class="toc-item" style="margin-left:24px"><a href="#53-前端开发可选">5.3 前端开发（可选）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#6-评分scorecard100-分制">6. 评分（Scorecard，100 分制）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#7-top-改进建议按影响成本排序">7. Top 改进建议（按影响/成本排序）</a></li>
+<li class="toc-item" style="margin-left:12px"><a href="#8-附录关键文件索引">8. 附录：关键文件索引</a></li>
+</ul>
+      <hr style="border:0;border-top:1px solid var(--border);margin:16px 0"/>
+      <div class="muted" style="font-size:12px">
+        Tip: Mermaid blocks are kept as code fences for portability.
+      </div>
+    </aside>
+    <main class="content">
+      <h1 id="ttyd-仓库深度走读报告以源码为事实源"><code>ttyd</code> 仓库深度走读报告（以源码为事实源）</h1>
+<p>生成日期：2026-02-23 仓库路径：<code>&lt;repo-root&gt;</code></p>
+<p>约束说明（重要）：</p>
+<ul>
+<li>本报告与同仓库的 <code>spec/</code>、<code>ui-ux-spec/</code> 一样，**只以源码与可执行配置为事实源**。</li>
+<li>按你的要求，走读过程中**不读取仓库现存文档**：<code>README*</code>、<code>docs/**</code>、<code>man/**</code> 与任何既有 <code>*.md</code>。</li>
+</ul>
+<p>---</p>
+<h2 id="1-一句话结论executive-summary">1. 一句话结论（Executive Summary）</h2>
+<p><code>ttyd</code> 是一个“单进程、事件驱动”的终端共享服务：后端用 libwebsockets 提供 HTTP + WebSocket；前端用 Preact + xterm.js 渲染终端；当浏览器通过 WS 完成首包 JSON 握手后，后端为该连接启动一个 PTY/ConPTY 子进程并双向转发字节流，从而在浏览器中获得真实终端会话。</p>
+<p>---</p>
+<h2 id="2-全局地图architecture-map">2. 全局地图（Architecture Map）</h2>
+<h3 id="21-目录与职责">2.1 目录与职责</h3>
+<ul>
+<li><code>src/</code>：后端 C 实现（HTTP、WS 协议、PTY/ConPTY、工具）</li>
+<li><code>html/</code>：前端工程（webpack + gulp），构建后生成 <code>src/html.h</code> 供后端内嵌返回</li>
+<li><code>CMakeLists.txt</code> / <code>cmake/</code>：CMake 构建与 Git 版本号计算</li>
+<li><code>scripts/</code>：交叉编译与 Windows(MSYS2) 构建脚本</li>
+<li><code>.github/workflows/</code>：CI/CD（backend/frontend/docker/release）</li>
+<li><code>Dockerfile*</code>：运行时镜像定义</li>
+<li><code>snap/</code>：snapcraft 打包</li>
+</ul>
+<h3 id="22-组件依赖图mermaid">2.2 组件依赖图（Mermaid）</h3>
+<pre class="mermaid">flowchart LR
+  subgraph Browser[浏览器]
+    UI[Preact UI]
+    XTERM[xterm.js + addons]
+    UI --&gt; XTERM
+  end
+
+  subgraph Server[ttyd 后端进程]
+    CLI[CLI/配置\nserver.c]
+    LWS[libwebsockets\nHTTP+WS]
+    HTTP[http.c]
+    WS[protocol.c]
+    PTY[pty.c]
+    UV[libuv loop]
+  end
+
+  CLI --&gt; LWS
+  LWS --&gt; HTTP
+  LWS --&gt; WS
+  WS --&gt; PTY
+  PTY --&gt; WS
+  LWS &lt;--&gt; UV
+
+  Browser &lt;-- &quot;HTTP: / /token&quot; --&gt; HTTP
+  Browser &lt;-- &quot;WS: /ws (tty)&quot; --&gt; WS</pre>
+<p>---</p>
+<h2 id="3-入口与关键执行流entrypoint-critical-path">3. 入口与关键执行流（Entrypoint → Critical Path）</h2>
+<h3 id="31-后端入口srcservercmain">3.1 后端入口：<code>src/server.c:main</code></h3>
+<p>关键路径： 1) 解析 <code>&amp;lt;command&amp;gt; [args...]</code> 的起始位置（避免 getopt 混淆） 2) 构造全局 <code>server</code>（含 uv loop） 3) 解析 CLI 参数并构造：</p>
+<ul>
+<li>鉴权策略（Basic / auth-header）</li>
+<li>endpoints（base-path 重写）</li>
+<li>TLS/IPv6/UNIX socket 等</li>
+<li>前端 preferences JSON（<code>--client-option</code> 汇总）</li>
+<p>4) 创建 lws context/vhost，并把 <code>server-&amp;gt;loop</code> 作为 foreign loop 注入 5) 注册 SIGINT/SIGTERM，进入 <code>lws_service(context,0)</code></p>
+</ul>
+<h3 id="32-关键时序浏览器访问-ws-握手-spawn-双向流">3.2 关键时序：浏览器访问 → WS 握手 → spawn → 双向流</h3>
+<pre class="mermaid">sequenceDiagram
+  participant C as Browser
+  participant H as HTTP(callback_http)
+  participant W as WS(callback_tty)
+  participant P as PTY/ConPTY(pty_process)
+
+  C-&gt;&gt;H: GET / (index)
+  H--&gt;&gt;C: 200 text/html (gzip or plain)
+
+  C-&gt;&gt;H: GET /token
+  H--&gt;&gt;C: 200 {&quot;token&quot;:&quot;...&quot;}
+
+  C-&gt;&gt;W: WS /ws subprotocol tty
+  W--&gt;&gt;C: established
+
+  C-&gt;&gt;W: hello JSON {AuthToken, columns, rows}
+  W-&gt;&gt;P: spawn_process(cols, rows)
+
+  W--&gt;&gt;C: SET_WINDOW_TITLE
+  W--&gt;&gt;C: SET_PREFERENCES
+
+  loop streaming
+    P--&gt;&gt;W: PTY bytes
+    W--&gt;&gt;C: OUTPUT + bytes
+    C--&gt;&gt;W: INPUT/RESIZE/PAUSE/RESUME
+    W--&gt;&gt;P: write/resize/pause/resume
+  end</pre>
+<p>---</p>
+<h2 id="4-核心模块深挖high-leverage-subsystems">4. 核心模块深挖（High-Leverage Subsystems）</h2>
+<blockquote>
+<p>这里按“杠杆最大”选择模块：理解它们就理解了整个仓库的行为边界。</p>
+</blockquote>
+<h3 id="41-http-handlersrchttpc">4.1 HTTP handler（<code>src/http.c</code>）</h3>
+<p>重点：</p>
+<ul>
+<li>路由由 <code>endpoints</code> 控制（默认 <code>/</code>、<code>/token</code>，base-path 会整体前缀化）</li>
+<li>鉴权优先级：</li>
+<p>1) <code>--auth-header</code>：缺失时返回 407 + <code>Proxy-Authenticate: Basic realm=&quot;ttyd&quot;</code> 2) <code>--credential</code>：缺失/不匹配时返回 401 + <code>WWW-Authenticate: Basic realm=&quot;ttyd&quot;</code> 3) 否则无需鉴权</p>
+<li><code>/token</code> 返回 JSON：<code>{&quot;token&quot;:&quot;&amp;lt;base64&amp;gt;&quot;}</code>（未启用 credential 则为空串）</li>
+<li><code>/</code> 返回 UI：</li>
+<li>若 <code>--index</code>：直接 serve 文件</li>
+<li>否则返回内嵌 <code>index_html</code>（gzip bytes）或解压缓存 <code>html_cache</code>（取决于编译宏与 Accept-Encoding）</li>
+</ul>
+<p>风险点：</p>
+<ul>
+<li>gzip/解压分支受编译宏 <code>LWS_WITH_HTTP_STREAM_COMPRESSION</code> 影响，复刻实现必须覆盖两种形态。</li>
+</ul>
+<h3 id="42-ws-协议与会话管理srcprotocolc-srcserverh">4.2 WS 协议与会话管理（<code>src/protocol.c</code> + <code>src/server.h</code>）</h3>
+<p>协议要点：</p>
+<ul>
+<li>WS 端点必须匹配 <code>endpoints.ws</code></li>
+<li>子协议 <code>tty</code></li>
+<li>首包 JSON 触发 spawn（并可选校验 token）</li>
+<li>业务帧格式：1 字节命令码 + payload（INPUT/RESIZE/PAUSE/RESUME；OUTPUT/TITLE/PREFERENCES）</li>
+<li>会话级约束：once/max-clients/check-origin/auth</li>
+</ul>
+<p>风险点：</p>
+<ul>
+<li>Basic Auth 模式下存在“两段式鉴权”：WS filter 阶段校验 Authorization；WS 首包 JSON 再校验 AuthToken。容易被移植时遗漏。</li>
+</ul>
+<h3 id="43-ptyconptysrcptyc">4.3 PTY/ConPTY（<code>src/pty.c</code>）</h3>
+<p>价值点：</p>
+<ul>
+<li>用统一结构体 <code>pty_process</code> 抽象跨平台 spawn、读写、resize、kill、退出回调；</li>
+<li>通过 libuv pipe 与 async，把“PTY IO + 子进程退出事件”统一投递到 uv loop。</li>
+</ul>
+<p>风险点（技术债）：</p>
+<ul>
+<li><code>paused</code> 标志位与 <code>pty_pause/pty_resume</code> guard 条件不一致，可能导致 PAUSE 实际不生效；复刻实现必须记录并决定“保持还是修复”（详见 <code>spec/09_Verification/KNOWN_GAPS.md</code>）。</li>
+</ul>
+<h3 id="44-前端协议实现htmlsrccomponentsterminalxtermindexts">4.4 前端协议实现（<code>html/src/components/terminal/xterm/index.ts</code>）</h3>
+<p>价值点：</p>
+<ul>
+<li>该文件同时承担：</li>
+<li>WS hello、二进制帧编码/解码</li>
+<li>preferences 合并（默认 + server + URL query）</li>
+<li>重连策略（自动/手动 Enter）</li>
+<li>overlay 微文案与时序</li>
+<li>rendererType 的加载与降级</li>
+<li>selection copy 的剪刀提示</li>
+<li>beforeunload 离开提示</li>
+</ul>
+<p>风险点：</p>
+<ul>
+<li>微文案必须逐字一致（<code>…</code>、<code>⏎</code> 等），否则“复刻级”验收会失败。</li>
+</ul>
+<h3 id="45-构建发布链路cmake-webpackgulp-ci">4.5 构建/发布链路（CMake + webpack/gulp + CI）</h3>
+<p>价值点：</p>
+<ul>
+<li>CMake 强制 libwebsockets 必须启用 libuv，否则直接 FATAL；</li>
+<li>前端 pipeline 把 dist/index.html 内联成 dist/inline.html，再 gzip 并生成 <code>src/html.h</code>；</li>
+<li>CI 工作流覆盖：</li>
+<li>cross-build 多 target</li>
+<li>docker multi-arch build/push</li>
+<li>release artifact 整理 + SHA256SUMS</li>
+</ul>
+<p>风险点：</p>
+<ul>
+<li><code>.github/workflows/frontend.yml</code> 的 path filter 只写了 <code>html/*</code>，对 <code>html/src/**</code> 的触发依赖 GitHub 的匹配行为；复刻时要小心（可在保持行为一致前提下优化 glob）。</li>
+</ul>
+<p>---</p>
+<h2 id="5-上手实操getting-started基于源码推导">5. 上手实操（Getting Started，基于源码推导）</h2>
+<h3 id="51-构建后端">5.1 构建后端</h3>
+<pre><code class="code language-bash">mkdir -p build
+cd build
+cmake ..
+cmake --build .</code></pre>
+<p>依赖要求与编译宏见 <code>spec/07_Infrastructure/BUILD.md</code>。</p>
+<h3 id="52-运行最常见">5.2 运行（最常见）</h3>
+<pre><code class="code language-bash">./ttyd -W bash</code></pre>
+<p>然后访问：<code>http://localhost:7681/</code>。</p>
+<h3 id="53-前端开发可选">5.3 前端开发（可选）</h3>
+<pre><code class="code language-bash">cd html
+corepack enable
+corepack prepare yarn@stable --activate
+yarn install
+yarn start</code></pre>
+<p>devServer 会代理 <code>/token</code> 与 <code>/ws</code> 到本地后端（默认 <code>http://localhost:7681</code>）。</p>
+<p>---</p>
+<h2 id="6-评分scorecard100-分制">6. 评分（Scorecard，100 分制）</h2>
+<blockquote>
+<p>评分基于“从源码观察到的事实”，不是主观喜好。每项给出原因与改进建议。</p>
+</blockquote>
+<p>| 维度 | 分数 | 依据（证据点） | 建议 | |---|---:|---|---| | 架构清晰度 | 15/15 | 单进程 + 明确分层：server/http/protocol/pty | - | | 接口契约清晰度 | 12/15 | WS 协议简单（命令字节），但“两段式鉴权”隐含且容易漏 | 在代码中补充注释/测试；或把 token/Authorization 统一化 | | 可维护性 | 12/15 | 文件少且集中；但有少量“怪异实现细节”（paused、-t loop） | 加回归测试锁定行为或修复并记录 | | 跨平台能力 | 13/15 | Unix PTY + Windows ConPTY 两套实现 | 增加 Windows CI/测试覆盖 | | 构建与发布成熟度 | 14/15 | cross-build、docker、release、snap 都齐全 | 前端 workflow path glob 可改进 | | 可观测性 | 8/10 | lws 日志较多；HTTP/WS 有 access log/notice | 增加结构化日志/可选 log level 文档 | | 安全性（基础） | 8/10 | 支持 basic/proxy header、origin check、TLS | 提供更明确的 auth-header 安全边界说明与测试 | | 测试可用性 | 3/5 | 仓库默认无测试 | 按 <code>spec/08_Testing/*</code> 补齐自动化测试 |</p>
+<p>总分：85/100</p>
+<p>---</p>
+<h2 id="7-top-改进建议按影响成本排序">7. Top 改进建议（按影响/成本排序）</h2>
+<p>1) **补齐回归测试**：至少覆盖 WS 协议、鉴权、base-path、once/max、gzip 分支、PTY spawn/exit。 2) **明确并锁定“怪异行为”**：例如 PTY pause/resume 标志位不一致，决定“保持”还是“修复”，并在 release note/KNOWN_GAPS 记录。 3) **完善 CI 触发条件**：前端 workflow 的 path filter 更精确地覆盖 <code>html/src/**</code>。 4) **增强安全可操作性**：为 <code>--auth-header</code> 明确威胁模型（header 伪造风险）、推荐配合反代配置。</p>
+<p>---</p>
+<h2 id="8-附录关键文件索引">8. 附录：关键文件索引</h2>
+<p>后端：</p>
+<ul>
+<li><code>src/server.c</code>、<code>src/server.h</code></li>
+<li><code>src/http.c</code></li>
+<li><code>src/protocol.c</code></li>
+<li><code>src/pty.c</code>、<code>src/pty.h</code></li>
+<li><code>src/utils.c</code>、<code>src/utils.h</code></li>
+</ul>
+<p>前端：</p>
+<ul>
+<li><code>html/src/components/app.tsx</code></li>
+<li><code>html/src/components/terminal/index.tsx</code></li>
+<li><code>html/src/components/terminal/xterm/index.ts</code></li>
+<li><code>html/src/components/terminal/xterm/addons/overlay.ts</code></li>
+<li><code>html/src/components/terminal/xterm/addons/zmodem.ts</code></li>
+<li><code>html/src/components/modal/*</code></li>
+<li><code>html/src/style/index.scss</code></li>
+</ul>
+<p>构建/发布：</p>
+<ul>
+<li><code>CMakeLists.txt</code>、<code>cmake/GetGitVersion.cmake</code></li>
+<li><code>html/webpack.config.js</code>、<code>html/gulpfile.js</code>、<code>html/package.json</code></li>
+<li><code>.github/workflows/*</code></li>
+<li><code>Dockerfile*</code></li>
+<li><code>snap/snapcraft.yaml</code></li>
+</ul>
+    </main>
+  </div>
+  
+</body>
+</html>
