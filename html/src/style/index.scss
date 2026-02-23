@@ -16,3 +16,23 @@ body {
     height: calc(100% - 10px);
   }
 }
+
+/*
+  iOS third-party IME (WeChat / Sogou etc.) compatibility:
+  - xterm.js uses a hidden helper textarea for input.
+  - Some iOS keyboards stop delivering input when the textarea is offscreen.
+  - Keep it in the viewport (still invisible) so IME works reliably.
+*/
+@supports (-webkit-touch-callout: none) {
+  .xterm .xterm-helper-textarea {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    pointer-events: none !important;
+  }
+}

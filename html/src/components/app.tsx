@@ -20,8 +20,15 @@ const clientOptions = {
     isWindows: false,
     unicodeVersion: '11',
 } as ClientOptions;
+const isCoarsePointer = (() => {
+    try {
+        return window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+    } catch {
+        return false;
+    }
+})();
 const termOptions = {
-    fontSize: 13,
+    fontSize: isCoarsePointer ? 16 : 13,
     fontFamily: 'Consolas,Liberation Mono,Menlo,Courier,monospace',
     theme: {
         foreground: '#d2d2d2',

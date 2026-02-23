@@ -170,6 +170,15 @@ export class Xterm {
     }
 
     @bind
+    public focus() {
+        try {
+            this.terminal.focus();
+        } catch {
+            // ignore (not opened yet)
+        }
+    }
+
+    @bind
     private initListeners() {
         const { terminal, fitAddon, overlayAddon, register, sendData } = this;
         register(

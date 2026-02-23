@@ -41,9 +41,11 @@
 
 ### 2.2 终端字体（xterm options）
 
-事实源：`html/src/components/app.tsx:24-25`。
+事实源：`html/src/components/app.tsx`。
 
-- `term.fontSize = 13`（px）
+- `term.fontSize` 默认值按输入设备类型分档（px）：
+  - 桌面/精细指针（`(pointer: fine)`）：`13`
+  - 触屏/粗指针（`(pointer: coarse)`）：`16`
 - `term.fontFamily = "Consolas,Liberation Mono,Menlo,Courier,monospace"`
 
 ### 2.3 Overlay（提示层）样式 token
@@ -136,4 +138,3 @@ body {
 |---|---:|---|
 | Modal | 40 | 覆盖全屏（固定定位） |
 | Overlay | 未显式设置 | 作为 `terminal.element` 的子节点，依赖 DOM 顺序覆盖终端内容 |
-
