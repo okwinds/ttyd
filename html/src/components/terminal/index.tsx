@@ -37,6 +37,7 @@ export class Terminal extends Component<Props, State> {
             <div
                 id={id}
                 ref={c => (this.container = c as HTMLElement)}
+                onTouchStart={this.focusTerminal}
                 onTouchEnd={this.focusTerminal}
                 onMouseDown={this.focusTerminal}
             >

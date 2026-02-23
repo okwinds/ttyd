@@ -84,6 +84,8 @@ export class Xterm {
     private pending = 0;
 
     private terminal: Terminal;
+    private mobileImeTextarea?: HTMLTextAreaElement;
+    private mobileImeComposing = false;
     private fitAddon = new FitAddon();
     private overlayAddon = new OverlayAddon();
     private clipboardAddon = new ClipboardAddon();
@@ -167,11 +169,102 @@ export class Xterm {
 
         terminal.open(parent);
         fitAddon.fit();
+
+        this.setupMobileImeShim();
+    }
+
+    private isIOS(): boolean {
+        // iOS Chrome is still WebKit; prefer UA check for compatibility-only behavior.
+        try {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent);
+        } catch {
+            return false;
+        }
+    }
+
+    private setupMobileImeShim() {
+        // Workaround for iOS third-party IME (WeChat/Sogou etc.) not reliably inputting into xterm's helper textarea.
+        // Strategy: keep a tiny, in-viewport textarea focused and forward its input into the terminal stream.
+        if (!this.isIOS()) return;
+        if (this.mobileImeTextarea) return;
+
+        const el = document.createElement('textarea');
+        el.id = 'ttyd-ime-shim';
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('autocapitalize', 'off');
+        el.setAttribute('autocorrect', 'off');
+        el.setAttribute('spellcheck', 'false');
+        el.setAttribute('inputmode', 'text');
+
+        // Keep it in viewport; almost invisible but not fully hidden (some IMEs drop input on fully transparent/offscreen fields).
+        el.style.position = 'fixed';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.width = '1px';
+        el.style.height = '1px';
+        el.style.opacity = '0.01';
+        el.style.padding = '0';
+        el.style.margin = '0';
+        el.style.border = '0';
+        el.style.background = 'transparent';
+        el.style.color = 'transparent';
+        // Avoid layout / tap capture.
+        el.style.pointerEvents = 'none';
+        el.style.zIndex = '2147483647';
+
+        document.body.appendChild(el);
+        this.mobileImeTextarea = el;
+
+        const flushAndClear = () => {
+            const text = el.value;
+            if (text && text.length > 0) {
+                this.sendData(text);
+            }
+            el.value = '';
+        };
+
+        this.register(
+            addEventListener(el, 'compositionstart', () => {
+                this.mobileImeComposing = true;
+            })
+        );
+        this.register(
+            addEventListener(el, 'compositionend', () => {
+                this.mobileImeComposing = false;
+                flushAndClear();
+            })
+        );
+        this.register(
+            addEventListener(el, 'input', () => {
+                if (this.mobileImeComposing) return;
+                flushAndClear();
+            })
+        );
+        this.register(
+            addEventListener(el, 'keydown', (e: Event) => {
+                const ev = e as KeyboardEvent;
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    this.sendData('\r');
+                    return;
+                }
+                if (ev.key === 'Backspace') {
+                    ev.preventDefault();
+                    // DEL
+                    this.sendData('\x7f');
+                    return;
+                }
+            })
+        );
     }
 
     @bind
     public focus() {
         try {
+            if (this.mobileImeTextarea) {
+                this.mobileImeTextarea.focus();
+                return;
+            }
             this.terminal.focus();
         } catch {
             // ignore (not opened yet)

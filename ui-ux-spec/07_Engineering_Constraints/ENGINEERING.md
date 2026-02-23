@@ -78,6 +78,20 @@
 
 ---
 
+## 5) iOS 第三方输入法（微信/搜狗等）输入兼容
+
+在 iOS 上，部分第三方输入法对“离屏/完全透明”的输入控件兼容性较差，可能出现：
+
+- 键盘弹出但终端不进字；
+- 系统键盘可用，但第三方键盘不可用。
+
+复刻实现必须包含一个“iOS 输入 shim”策略（不影响视觉与布局）：
+
+- 在页面中创建一个极小的 `textarea`（建议 id：`ttyd-ime-shim`），固定在视口内（`position: fixed; top: 0; left: 0`），不可见但**不完全隐藏**（例如 `opacity: 0.01`），并保持可被 focus。
+- 当用户点击/触摸终端区域时，优先 focus 该 textarea，并把其 `input`/`compositionend` 产生的文本转发为终端输入流（等价于发送 WS `INPUT`）。
+
+---
+
 ## 5) 生成物约束：`src/html.h`
 
 事实源：`html/gulpfile.js` 与 `spec/07_Infrastructure/FRONTEND_PIPELINE.md`。
@@ -85,4 +99,3 @@
 复刻实现不要求字节一致，但必须保证：
 - 后端能在 gzip 与非 gzip 的 Accept-Encoding 情况下返回可运行 UI；
 - `index_html_size` 与解压后的 HTML 长度一致（否则后端 inflate 预分配长度会不匹配）。
-
